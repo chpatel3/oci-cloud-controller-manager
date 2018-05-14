@@ -84,6 +84,8 @@ func validateLoadBalancerConfig(c *LoadBalancerConfig, fldPath *field.Path) fiel
 func ValidateConfig(c *Config) field.ErrorList {
 	allErrs := field.ErrorList{}
 	allErrs = append(allErrs, validateAuthConfig(&c.Auth, field.NewPath("auth"))...)
-	allErrs = append(allErrs, validateLoadBalancerConfig(&c.LoadBalancer, field.NewPath("loadBalancer"))...)
+	if c.LoadBalancerIsEnabled() {
+		allErrs = append(allErrs, validateLoadBalancerConfig(c.LoadBalancer, field.NewPath("loadBalancer"))...)
+	}
 	return allErrs
 }

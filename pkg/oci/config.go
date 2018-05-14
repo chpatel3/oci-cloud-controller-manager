@@ -67,8 +67,8 @@ type LoadBalancerConfig struct {
 // Config holds the OCI cloud-provider config passed to Kubernetes compontents
 // via the --cloud-config option.
 type Config struct {
-	Auth         AuthConfig         `yaml:"auth"`
-	LoadBalancer LoadBalancerConfig `yaml:"loadBalancer"`
+	Auth         AuthConfig          `yaml:"auth"`
+	LoadBalancer *LoadBalancerConfig `yaml:"loadBalancer"`
 
 	// CompartmentID is the OCID of the Compartment within which the cluster
 	// resides.
@@ -80,7 +80,7 @@ type Config struct {
 
 // Complete the config applying defaults / overrides.
 func (c *Config) Complete() {
-	if c.LoadBalancer.SecurityListManagementMode == "" {
+	if c.LoadBalancerIsEnabled() && c.LoadBalancer.SecurityListManagementMode == "" {
 		c.LoadBalancer.SecurityListManagementMode = ManagementModeAll // default
 		if c.LoadBalancer.DisableSecurityListManagement {
 			glog.Warningf("cloud-provider config: \"loadBalancer.disableSecurityListManagement\" is DEPRECIATED and will be removed in a later release. Please set \"loadBalancer.SecurityListManagementMode: %s\".", ManagementModeNone)
@@ -120,4 +120,10 @@ func ReadConfig(r io.Reader) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// LoadBalancerIsDisabled returns a bool based on whether a LoadBalancer
+// configuration exists.
+func (c *Config) LoadBalancerIsEnabled() bool {
+	return c.LoadBalancer != nil
 }
