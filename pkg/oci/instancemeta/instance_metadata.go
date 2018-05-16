@@ -52,6 +52,7 @@ func New() Interface {
 // Get either returns the cached metadata for the current instance or queries
 // the instance metadata API, populates the cache, and returns the result.
 func (m *metadataGetter) Get() (*InstanceMetadata, error) {
+	// TODO (hlowndes) Limiting here?
 	req, err := http.NewRequest("GET", m.baseURL+metadataEndpoint, nil)
 	if err != nil {
 		return nil, err

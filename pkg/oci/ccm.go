@@ -35,12 +35,18 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	listersv1 "k8s.io/client-go/listers/core/v1"
 	cache "k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/flowcontrol"
 	cloudprovider "k8s.io/kubernetes/pkg/cloudprovider"
 	controller "k8s.io/kubernetes/pkg/controller"
 
 	"github.com/oracle/oci-cloud-controller-manager/pkg/oci/client"
 	"github.com/oracle/oci-cloud-controller-manager/pkg/oci/instancemeta"
 	"github.com/oracle/oci-cloud-controller-manager/pkg/oci/util"
+)
+
+const (
+	rateLimitQPSDefault    = 1.0
+	rateLimitBucketDefault = 5
 )
 
 // ProviderName uniquely identifies the Oracle Bare Metal Cloud Services (OCI)
@@ -73,7 +79,43 @@ func NewCloudProvider(config *Config) (cloudprovider.Interface, error) {
 	if err != nil {
 		return nil, err
 	}
-	c, err := client.New(cp)
+
+	// Set to default values if configuration not declared
+	if config.RateLimiter.RateLimitQPSRead == 0 {
+		config.RateLimiter.RateLimitQPSRead = rateLimitQPSDefault
+	}
+	if config.RateLimiter.RateLimitBucketRead == 0 {
+		config.RateLimiter.RateLimitBucketRead = rateLimitBucketDefault
+	}
+	if config.RateLimiter.RateLimitQPSWrite == 0 {
+		config.RateLimiter.RateLimitQPSWrite = rateLimitQPSDefault
+	}
+	if config.RateLimiter.RateLimitBucketWrite == 0 {
+		config.RateLimiter.RateLimitBucketWrite = rateLimitBucketDefault
+	}
+
+	operationPollRateLimiterRead := flowcontrol.NewTokenBucketRateLimiter(
+		config.RateLimiter.RateLimitQPSRead,
+		config.RateLimiter.RateLimitBucketRead)
+
+	operationPollRateLimiterWrite := flowcontrol.NewTokenBucketRateLimiter(
+		config.RateLimiter.RateLimitQPSWrite,
+		config.RateLimiter.RateLimitBucketWrite)
+
+	glog.V(2).Infof("OCI using read rate limit configuration: QPS=%g, bucket=%d",
+		config.RateLimiter.RateLimitQPSRead,
+		config.RateLimiter.RateLimitBucketRead)
+
+	glog.V(2).Infof("OCI using write rate limit configuration: QPS=%g, bucket=%d",
+		config.RateLimiter.RateLimitQPSWrite,
+		config.RateLimiter.RateLimitBucketWrite)
+
+	opRateLimiter := &client.RateLimiter{
+		Reader: operationPollRateLimiterRead,
+		Writer: operationPollRateLimiterWrite,
+	}
+
+	c, err := client.New(cp, opRateLimiter)
 	if err != nil {
 		return nil, err
 	}

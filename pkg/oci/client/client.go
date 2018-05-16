@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/flowcontrol"
 
 	"github.com/golang/glog"
 	"github.com/oracle/oci-go-sdk/common"
@@ -40,16 +41,24 @@ type Interface interface {
 	Networking() NetworkingInterface
 }
 
+// OperationPollRateLimiter reader and writer.
+type RateLimiter struct {
+	Reader flowcontrol.RateLimiter
+	Writer flowcontrol.RateLimiter
+}
+
 type client struct {
 	compute      *core.ComputeClient
 	network      *core.VirtualNetworkClient
 	loadbalancer *loadbalancer.LoadBalancerClient
 
+	rateLimiter RateLimiter
+
 	subnetCache cache.Store
 }
 
 // New constructs an OCI API client.
-func New(cp common.ConfigurationProvider) (Interface, error) {
+func New(cp common.ConfigurationProvider, opRateLimiter *RateLimiter) (Interface, error) {
 	compute, err := core.NewComputeClientWithConfigurationProvider(cp)
 	if err != nil {
 		return nil, errors.Wrap(err, "NewComputeClientWithConfigurationProvider")
@@ -84,6 +93,7 @@ func New(cp common.ConfigurationProvider) (Interface, error) {
 		compute:      &compute,
 		network:      &network,
 		loadbalancer: &lb,
+		rateLimiter:  *opRateLimiter,
 
 		subnetCache: cache.NewTTLStore(subnetCacheKeyFn, time.Duration(24)*time.Hour),
 	}
